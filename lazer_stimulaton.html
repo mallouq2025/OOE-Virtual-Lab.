@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>sketch.ino — Copy Me</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#02060a; color:#a8d4e8; font-family:'DM Mono',monospace; padding:24px; }
+  h2 { color:#00f5d4; font-size:14px; letter-spacing:3px; margin-bottom:16px; }
+  .instructions {
+    background:#060e17; border:1px solid #0d2235; border-left:3px solid #00f5d4;
+    padding:14px 18px; margin-bottom:20px; font-size:12px; line-height:1.8; color:#7fb8d4;
+  }
+  .instructions strong { color:#f0c040; }
+  .copy-btn {
+    display:block; width:100%; padding:12px;
+    background:#00f5d4; color:#000; border:none;
+    font-family:'DM Mono',monospace; font-size:13px; font-weight:700;
+    letter-spacing:3px; cursor:pointer; margin-bottom:16px;
+    transition:all .2s;
+  }
+  .copy-btn:hover { background:#00c4b0; }
+  .copy-btn.ok { background:#22c55e; }
+  pre {
+    background:#01040a; border:1px solid #0d2235;
+    padding:20px; font-size:12px; line-height:1.8;
+    overflow-x:auto; white-space:pre; color:#4a9ab5;
+    max-height:80vh; overflow-y:auto;
+  }
+  .kw  { color:#00f5d4; }
+  .fn  { color:#38bdf8; }
+  .str { color:#a78bfa; }
+  .num { color:#f59e0b; }
+  .cm  { color:#1e4a5e; }
+  .pp  { color:#22c55e; }
+</style>
+</head>
+<body>
+
+<h2>// SKETCH.INO — SMART SURGICAL LASER GUIDE</h2>
+
+<div class="instructions">
+  <strong>كيفاش تستخدمه على Wokwi:</strong><br>
+  ① اضغط COPY CODE هنا تحت<br>
+  ② روح على <strong>wokwi.com/projects/new/arduino-uno</strong><br>
+  ③ امسح كل شي في المحرر ← الصق (Ctrl+V)<br>
+  ④ اضغط <strong>+</strong> ← Add file ← اكتب <strong>libraries.txt</strong> ← اكتب فيه: <strong>LiquidCrystal I2C</strong><br>
+  ⑤ الصق diagram.json ← اضغط ▶ Run
+</div>
+
+<button class="copy-btn" id="cpyBtn" onclick="copyIt()">⎘ &nbsp; COPY CODE TO CLIPBOARD</button>
+
+<pre id="codeblock">// Smart Surgical Laser Guide
+// Wokwi Simulation - Arduino Uno
+// Components: 2x Servo, LDR, LCD I2C, 2x LED, Potentiometer
+
+#include &lt;Servo.h&gt;
+#include &lt;Wire.h&gt;
+#include &lt;LiquidCrystal_I2C.h&gt;
+
+// ── Pin Definitions ───────────────────────────
+#define PIN_SERVO_M1   9
+#define PIN_SERVO_M2   10
+#define PIN_LDR        A0
+#define PIN_POT        A1
+#define PIN_BTN        4
+#define PIN_LED_GREEN  7
+#define PIN_LED_RED    6
+#define LDR_THRESHOLD  600
+
+// ── Objects ───────────────────────────────────
+Servo servoM1;
+Servo servoM2;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// ── State ─────────────────────────────────────
+int theta1 = 45;
+int theta2 = 45;
+bool targetHit = false;
+int servoSteps = 0;
+unsigned long lastPrint = 0;
+
+byte checkChar[8] = {
+  0b00000, 0b00001, 0b00011, 0b10110,
+  0b11100, 0b01000, 0b00000, 0b00000
+};
+
+// ── Law of Reflection: compute θ1 and θ2 ──────
+// θ1 = targetAngle / 2
+// θ2 = 90 - θ1   (perpendicular mirrors)
+void computeAngles(int targetDeg, int &t1, int &t2) {
+  targetDeg = constrain(targetDeg, 10, 170);
+  t1 = targetDeg / 2;
+  t2 = 90 - t1;
+  t1 = constrain(t1, 10, 85);
+  t2 = constrain(t2, 10, 85);
+}
+
+// ── Smooth servo movement ──────────────────────
+void moveSmooth(Servo &srv, int &current, int target) {
+  if (current == target) return;
+  int step = (target > current) ? 1 : -1;
+  while (current != target) {
+    current += step;
+    srv.write(current);
+    delay(12);
+    servoSteps++;
+  }
+}
+
+// ── LCD update ─────────────────────────────────
+void updateLCD(int t1, int t2, bool hit, int ldr) {
+  lcd.setCursor(0, 0);
+  lcd.print("M1:"); lcd.print(t1); lcd.print((char)223);
+  lcd.print(" M2:"); lcd.print(t2); lcd.print((char)223);
+  lcd.print("   ");
+
+  lcd.setCursor(0, 1);
+  if (hit) {
+    lcd.print("TARGET HIT!     ");
+  } else {
+    lcd.print("LDR:"); lcd.print(ldr); lcd.print(" SCAN    ");
+  }
+}
+
+// ── Serial report ──────────────────────────────
+void printSerial(int t1, int t2, int ldr, bool hit) {
+  Serial.println("--------------------------------");
+  Serial.print("  Theta1 (M1) : "); Serial.print(t1);   Serial.println(" deg");
+  Serial.print("  Theta2 (M2) : "); Serial.print(t2);   Serial.println(" deg");
+  Serial.print("  LDR value   : "); Serial.println(ldr);
+  Serial.print("  Status      : "); Serial.println(hit ? "TARGET HIT!" : "Searching...");
+  Serial.print("  Servo steps : "); Serial.println(servoSteps);
+}
+
+// ══════════════════════════════════════════════
+void setup() {
+  Serial.begin(9600);
+
+  servoM1.attach(PIN_SERVO_M1);
+  servoM2.attach(PIN_SERVO_M2);
+  servoM1.write(45);
+  servoM2.write(45);
+
+  pinMode(PIN_LED_GREEN, OUTPUT);
+  pinMode(PIN_LED_RED,   OUTPUT);
+  pinMode(PIN_BTN, INPUT_PULLUP);
+  digitalWrite(PIN_LED_RED, HIGH);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.createChar(0, checkChar);
+
+  // Startup screen
+  lcd.clear();
+  lcd.setCursor(0, 0); lcd.print("LASER GUIDE SYS ");
+  lcd.setCursor(0, 1); lcd.print("Initializing... ");
+  delay(1000);
+
+  // Self-test servo sweep
+  lcd.setCursor(0, 1); lcd.print("Self-test...    ");
+  moveSmooth(servoM1, theta1, 75);
+  moveSmooth(servoM2, theta2, 75);
+  delay(200);
+  moveSmooth(servoM1, theta1, 20);
+  moveSmooth(servoM2, theta2, 20);
+  delay(200);
+  moveSmooth(servoM1, theta1, 45);
+  moveSmooth(servoM2, theta2, 45);
+
+  lcd.clear();
+  Serial.println("=== SMART SURGICAL LASER GUIDE ===");
+  Serial.println("System ready. Turn potentiometer to aim.");
+  Serial.println("");
+}
+
+// ══════════════════════════════════════════════
+void loop() {
+  int ldrValue    = analogRead(PIN_LDR);
+  int potValue    = analogRead(PIN_POT);
+  int targetAngle = map(potValue, 0, 1023, 10, 170);
+
+  int newT1, newT2;
+  computeAngles(targetAngle, newT1, newT2);
+
+  if (abs(newT1 - theta1) >= 2) moveSmooth(servoM1, theta1, newT1);
+  if (abs(newT2 - theta2) >= 2) moveSmooth(servoM2, theta2, newT2);
+
+  targetHit = (ldrValue > LDR_THRESHOLD);
+  digitalWrite(PIN_LED_GREEN, targetHit ? HIGH : LOW);
+  digitalWrite(PIN_LED_RED,   targetHit ? LOW  : HIGH);
+
+  updateLCD(theta1, theta2, targetHit, ldrValue);
+
+  if (millis() - lastPrint > 600) {
+    printSerial(theta1, theta2, ldrValue, targetHit);
+    lastPrint = millis();
+  }
+
+  delay(40);
+}</pre>
+
+<script>
+function copyIt() {
+  // Get raw text without HTML tags
+  const raw = `// Smart Surgical Laser Guide
+// Wokwi Simulation - Arduino Uno
+// Components: 2x Servo, LDR, LCD I2C, 2x LED, Potentiometer
+
+#include <Servo.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// Pin Definitions
+#define PIN_SERVO_M1   9
+#define PIN_SERVO_M2   10
+#define PIN_LDR        A0
+#define PIN_POT        A1
+#define PIN_BTN        4
+#define PIN_LED_GREEN  7
+#define PIN_LED_RED    6
+#define LDR_THRESHOLD  600
+
+Servo servoM1;
+Servo servoM2;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+int theta1 = 45;
+int theta2 = 45;
+bool targetHit = false;
+int servoSteps = 0;
+unsigned long lastPrint = 0;
+
+byte checkChar[8] = {
+  0b00000, 0b00001, 0b00011, 0b10110,
+  0b11100, 0b01000, 0b00000, 0b00000
+};
+
+void computeAngles(int targetDeg, int &t1, int &t2) {
+  targetDeg = constrain(targetDeg, 10, 170);
+  t1 = targetDeg / 2;
+  t2 = 90 - t1;
+  t1 = constrain(t1, 10, 85);
+  t2 = constrain(t2, 10, 85);
+}
+
+void moveSmooth(Servo &srv, int &current, int target) {
+  if (current == target) return;
+  int step = (target > current) ? 1 : -1;
+  while (current != target) {
+    current += step;
+    srv.write(current);
+    delay(12);
+    servoSteps++;
+  }
+}
+
+void updateLCD(int t1, int t2, bool hit, int ldr) {
+  lcd.setCursor(0, 0);
+  lcd.print("M1:"); lcd.print(t1); lcd.print((char)223);
+  lcd.print(" M2:"); lcd.print(t2); lcd.print((char)223);
+  lcd.print("   ");
+  lcd.setCursor(0, 1);
+  if (hit) {
+    lcd.print("TARGET HIT!     ");
+  } else {
+    lcd.print("LDR:"); lcd.print(ldr); lcd.print(" SCAN    ");
+  }
+}
+
+void printSerial(int t1, int t2, int ldr, bool hit) {
+  Serial.println("--------------------------------");
+  Serial.print("  Theta1 (M1) : "); Serial.print(t1);   Serial.println(" deg");
+  Serial.print("  Theta2 (M2) : "); Serial.print(t2);   Serial.println(" deg");
+  Serial.print("  LDR value   : "); Serial.println(ldr);
+  Serial.print("  Status      : "); Serial.println(hit ? "TARGET HIT!" : "Searching...");
+  Serial.print("  Servo steps : "); Serial.println(servoSteps);
+}
+
+void setup() {
+  Serial.begin(9600);
+  servoM1.attach(PIN_SERVO_M1);
+  servoM2.attach(PIN_SERVO_M2);
+  servoM1.write(45);
+  servoM2.write(45);
+  pinMode(PIN_LED_GREEN, OUTPUT);
+  pinMode(PIN_LED_RED,   OUTPUT);
+  pinMode(PIN_BTN, INPUT_PULLUP);
+  digitalWrite(PIN_LED_RED, HIGH);
+  lcd.init();
+  lcd.backlight();
+  lcd.createChar(0, checkChar);
+  lcd.clear();
+  lcd.setCursor(0, 0); lcd.print("LASER GUIDE SYS ");
+  lcd.setCursor(0, 1); lcd.print("Initializing... ");
+  delay(1000);
+  lcd.setCursor(0, 1); lcd.print("Self-test...    ");
+  moveSmooth(servoM1, theta1, 75);
+  moveSmooth(servoM2, theta2, 75);
+  delay(200);
+  moveSmooth(servoM1, theta1, 20);
+  moveSmooth(servoM2, theta2, 20);
+  delay(200);
+  moveSmooth(servoM1, theta1, 45);
+  moveSmooth(servoM2, theta2, 45);
+  lcd.clear();
+  Serial.println("=== SMART SURGICAL LASER GUIDE ===");
+  Serial.println("System ready. Turn potentiometer to aim.");
+  Serial.println("");
+}
+
+void loop() {
+  int ldrValue    = analogRead(PIN_LDR);
+  int potValue    = analogRead(PIN_POT);
+  int targetAngle = map(potValue, 0, 1023, 10, 170);
+  int newT1, newT2;
+  computeAngles(targetAngle, newT1, newT2);
+  if (abs(newT1 - theta1) >= 2) moveSmooth(servoM1, theta1, newT1);
+  if (abs(newT2 - theta2) >= 2) moveSmooth(servoM2, theta2, newT2);
+  targetHit = (ldrValue > LDR_THRESHOLD);
+  digitalWrite(PIN_LED_GREEN, targetHit ? HIGH : LOW);
+  digitalWrite(PIN_LED_RED,   targetHit ? LOW  : HIGH);
+  updateLCD(theta1, theta2, targetHit, ldrValue);
+  if (millis() - lastPrint > 600) {
+    printSerial(theta1, theta2, ldrValue, targetHit);
+    lastPrint = millis();
+  }
+  delay(40);
+}`;
+
+  navigator.clipboard.writeText(raw).then(() => {
+    const btn = document.getElementById('cpyBtn');
+    btn.textContent = '✓  COPIED! Now paste in Wokwi editor';
+    btn.classList.add('ok');
+    setTimeout(() => {
+      btn.textContent = '⎘  COPY CODE TO CLIPBOARD';
+      btn.classList.remove('ok');
+    }, 3000);
+  });
+}
+</script>
+</body>
+</html>

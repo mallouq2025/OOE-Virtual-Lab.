@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laser Mirror Simulation — Track 1</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;500;700&display=swap');
+:root {
+  --bg:#050a0f; --panel:#080f17; --border:#0f2a3a;
+  --laser:#00ffe0; --accent:#f0c040; --dim:#1a3344;
+  --text:#a8d4e8; --m1:#4af7ff; --m2:#ff6b9d;
+  --green:#4ade80; --red:#ff3e6c;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;overflow:hidden;}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);pointer-events:none;z-index:999;}
+header{padding:14px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;background:linear-gradient(90deg,#050a0f,#0a1a28);flex-shrink:0;}
+.badge{background:var(--laser);color:#000;font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 8px;letter-spacing:2px;clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);}
+header h1{font-size:20px;font-weight:700;color:#fff;letter-spacing:3px;}
+header h1 span{color:var(--laser);}
+.mission-tag{margin-left:auto;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent);}
+.layout{display:grid;grid-template-columns:1fr 320px;height:calc(100vh - 52px);}
+.canvas-wrap{position:relative;background:radial-gradient(ellipse at 20% 80%,rgba(0,255,224,0.04) 0%,transparent 50%),radial-gradient(ellipse at 80% 20%,rgba(255,107,157,0.04) 0%,transparent 50%),#050a0f;border-right:1px solid var(--border);overflow:hidden;}
+canvas{display:block;}
+.canvas-hint{position:absolute;top:12px;left:16px;font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);letter-spacing:2px;}
+.selected-label{position:absolute;top:12px;right:16px;font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--accent);letter-spacing:1px;transition:all 0.2s;}
+.panel{background:var(--panel);display:flex;flex-direction:column;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+.sec{padding:16px 18px;border-bottom:1px solid var(--border);}
+.sec-title{font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:3px;color:var(--laser);margin-bottom:12px;text-transform:uppercase;}
+.mirror-tabs{display:flex;gap:8px;margin-bottom:14px;}
+.mtab{flex:1;padding:8px 0;text-align:center;border:1px solid var(--border);font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:1px;transition:all 0.2s;background:transparent;color:var(--dim);}
+.mtab.m1-active{border-color:var(--m1);color:var(--m1);background:rgba(74,247,255,0.07);box-shadow:0 0 12px rgba(74,247,255,0.15);}
+.mtab.m2-active{border-color:var(--m2);color:var(--m2);background:rgba(255,107,157,0.07);box-shadow:0 0 12px rgba(255,107,157,0.15);}
+.angle-block{margin-bottom:14px;}
+.angle-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.angle-header .alabel{font-size:13px;font-weight:600;color:#cce8f5;}
+.angle-input-wrap{display:flex;align-items:center;border:1px solid var(--border);background:#060d14;overflow:hidden;margin-bottom:8px;}
+.angle-input-wrap input[type=number]{width:58px;padding:5px 8px;background:transparent;border:none;outline:none;font-family:'Share Tech Mono',monospace;font-size:14px;color:var(--accent);text-align:center;-moz-appearance:textfield;}
+.angle-input-wrap input[type=number]::-webkit-inner-spin-button,.angle-input-wrap input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+.angle-input-wrap .deg-label{padding:0 8px;font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--dim);border-left:1px solid var(--border);line-height:30px;}
+.angle-slider{width:100%;-webkit-appearance:none;height:3px;background:var(--dim);border-radius:2px;outline:none;cursor:pointer;}
+.angle-slider.s-m1::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--m1);box-shadow:0 0 8px rgba(74,247,255,0.6);cursor:pointer;}
+.angle-slider.s-m2::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--m2);box-shadow:0 0 8px rgba(255,107,157,0.6);cursor:pointer;}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.rcard{background:#060d14;border:1px solid var(--border);padding:10px;position:relative;overflow:hidden;}
+.rcard::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;}
+.rcard.c-m1::before{background:var(--m1);}
+.rcard.c-m2::before{background:var(--m2);}
+.rcard.c-acc::before{background:var(--accent);}
+.rcard .rl{font-family:'Share Tech Mono',monospace;font-size:8px;letter-spacing:2px;color:#4a7a99;margin-bottom:4px;}
+.rcard .rv{font-size:20px;font-weight:700;color:#fff;line-height:1;}
+.rcard .rv sup{font-size:11px;color:var(--accent);}
+.proof-box{background:#060d14;border:1px solid var(--border);border-left:3px solid var(--laser);padding:12px;font-size:12px;line-height:1.7;}
+.proof-box .step{margin-bottom:6px;}
+.proof-box .step .n{color:var(--laser);font-family:'Share Tech Mono',monospace;margin-right:6px;}
+.proof-box .hl{color:var(--accent);font-family:'Share Tech Mono',monospace;}
+.proof-box .ok{color:var(--green);font-family:'Share Tech Mono',monospace;}
+.verdict{display:flex;align-items:center;gap:8px;padding:10px 14px;margin-top:10px;font-family:'Share Tech Mono',monospace;font-size:11px;border:1px solid;letter-spacing:1px;transition:all 0.3s;}
+.verdict .dot{width:7px;height:7px;border-radius:50%;animation:blink 1.2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.verdict.ok{border-color:rgba(74,222,128,.35);color:var(--green);background:rgba(74,222,128,.06);}
+.verdict.ok .dot{background:var(--green);box-shadow:0 0 8px var(--green);}
+.verdict.no{border-color:rgba(255,62,108,.35);color:var(--red);background:rgba(255,62,108,.06);}
+.verdict.no .dot{background:var(--red);box-shadow:0 0 8px var(--red);animation:none;}
+</style>
+</head>
+<body>
+<header>
+  <div class="badge">TRACK 01</div>
+  <h1>The Laser <span>Grid</span></h1>
+  <div class="mission-tag">// MISSION 01 — REDIRECT THE BEAM</div>
+</header>
+<div class="layout">
+  <div class="canvas-wrap">
+    <div class="canvas-hint">CLICK A MIRROR TO SELECT IT</div>
+    <div class="selected-label" id="selLabel">— SELECT A MIRROR —</div>
+    <canvas id="sim"></canvas>
+  </div>
+  <div class="panel">
+    <div class="sec">
+      <div class="sec-title">// Select Mirror</div>
+      <div class="mirror-tabs">
+        <button class="mtab m1-active" id="tabM1" onclick="selectMirror(1)">M₁ (HORIZONTAL)</button>
+        <button class="mtab" id="tabM2" onclick="selectMirror(2)">M₂ (VERTICAL)</button>
+      </div>
+      <div id="ctrlM1">
+        <div class="angle-block">
+          <div class="angle-header"><span class="alabel">θ₁ — Incidence angle on M₁</span></div>
+          <div class="angle-input-wrap">
+            <input type="number" id="inp_i1" min="5" max="85" value="30" oninput="setAngle('i1',this.value)">
+            <span class="deg-label">DEG</span>
+          </div>
+          <input type="range" class="angle-slider s-m1" id="sl_i1" min="5" max="85" value="30" oninput="setAngle('i1',this.value)">
+        </div>
+        <div class="angle-block">
+          <div class="angle-header"><span class="alabel">M₁ Rotation</span></div>
+          <div class="angle-input-wrap">
+            <input type="number" id="inp_m1r" min="-40" max="40" value="0" oninput="setAngle('m1r',this.value)">
+            <span class="deg-label">DEG</span>
+          </div>
+          <input type="range" class="angle-slider s-m1" id="sl_m1r" min="-40" max="40" value="0" oninput="setAngle('m1r',this.value)">
+        </div>
+      </div>
+      <div id="ctrlM2" style="display:none">
+        <div class="angle-block">
+          <div class="angle-header"><span class="alabel">M₂ Rotation offset</span></div>
+          <div class="angle-input-wrap">
+            <input type="number" id="inp_m2r" min="-40" max="40" value="0" oninput="setAngle('m2r',this.value)">
+            <span class="deg-label">DEG</span>
+          </div>
+          <input type="range" class="angle-slider s-m2" id="sl_m2r" min="-40" max="40" value="0" oninput="setAngle('m2r',this.value)">
+        </div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">// Live Calculations</div>
+      <div class="result-grid">
+        <div class="rcard c-m1"><div class="rl">θᵢ₁ INCIDENCE</div><div class="rv" id="rv_i1">30<sup>°</sup></div></div>
+        <div class="rcard c-m1"><div class="rl">θᵣ₁ REFLECTION</div><div class="rv" id="rv_r1">30<sup>°</sup></div></div>
+        <div class="rcard c-m2"><div class="rl">θᵢ₂ ON M2</div><div class="rv" id="rv_i2">60<sup>°</sup></div></div>
+        <div class="rcard c-m2"><div class="rl">θᵣ₂ REFLECTION</div><div class="rv" id="rv_r2">60<sup>°</sup></div></div>
+        <div class="rcard c-acc" style="grid-column:1/-1"><div class="rl">EXIT vs INCIDENT ANGLE</div><div class="rv" id="rv_diff">180<sup>°</sup></div></div>
+      </div>
+      <div class="verdict ok" id="verdict">
+        <div class="dot"></div>
+        <span id="verdict_text">EXIT RAY IS ANTI-PARALLEL ✓</span>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-title">// Mathematical Proof</div>
+      <div class="proof-box">
+        <div class="step"><span class="n">①</span>Law of reflection: <span class="hl">θᵢ = θᵣ</span></div>
+        <div class="step"><span class="n">②</span>M1 ⊥ M2 → <span class="hl">θᵢ₂ = 90° − θᵢ₁</span></div>
+        <div class="step"><span class="n">③</span>Total deviation = 2θᵢ₁ + 2θᵢ₂</div>
+        <div class="step" style="padding-left:20px">= 2θᵢ₁ + 2(90°−θᵢ₁)</div>
+        <div class="step" style="padding-left:20px">= <span class="ok">180° for ANY θᵢ₁ ✓</span></div>
+        <div class="step" style="margin-top:8px;border-top:1px solid #0f2a3a;padding-top:8px"><span class="ok">∴ v⃗_final = −v⃗_initial</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+const DEG = Math.PI/180;
+const RAD = 180/Math.PI;
+
+let angles = { i1:30, m1r:0, m2r:0 };
+let selectedMirror = 1;
+let mirrorHitZones = [];
+
+function resize(){
+  const w = canvas.parentElement;
+  canvas.width = w.clientWidth;
+  canvas.height = w.clientHeight;
+  draw();
+}
+window.addEventListener('resize', resize);
+
+canvas.addEventListener('click', e => {
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX-r.left, my = e.clientY-r.top;
+  mirrorHitZones.forEach(z => {
+    if(nearSeg(mx,my,z.x1,z.y1,z.x2,z.y2,14)) selectMirror(z.id);
+  });
+});
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX-r.left, my = e.clientY-r.top;
+  let on = false;
+  mirrorHitZones.forEach(z => { if(nearSeg(mx,my,z.x1,z.y1,z.x2,z.y2,14)) on=true; });
+  canvas.style.cursor = on?'pointer':'crosshair';
+});
+
+function nearSeg(px,py,x1,y1,x2,y2,thresh){
+  const dx=x2-x1,dy=y2-y1,lsq=dx*dx+dy*dy;
+  if(lsq===0) return false;
+  let t=((px-x1)*dx+(py-y1)*dy)/lsq;
+  t=Math.max(0,Math.min(1,t));
+  return Math.hypot(px-x1-t*dx, py-y1-t*dy)<thresh;
+}
+
+function selectMirror(id){
+  selectedMirror=id;
+  document.getElementById('ctrlM1').style.display=id===1?'block':'none';
+  document.getElementById('ctrlM2').style.display=id===2?'block':'none';
+  document.getElementById('tabM1').className='mtab'+(id===1?' m1-active':'');
+  document.getElementById('tabM2').className='mtab'+(id===2?' m2-active':'');
+  document.getElementById('selLabel').textContent=id===1?'SELECTED: M₁':'SELECTED: M₂';
+  document.getElementById('selLabel').style.color=id===1?'var(--m1)':'var(--m2)';
+  draw();
+}
+
+function setAngle(key,val){
+  val=parseFloat(val); if(isNaN(val)) return;
+  const lim={i1:[5,85],m1r:[-40,40],m2r:[-40,40]};
+  val=Math.max(lim[key][0],Math.min(lim[key][1],val));
+  angles[key]=val;
+  const inp=document.getElementById('inp_'+key);
+  const sl=document.getElementById('sl_'+key);
+  if(inp) inp.value=val;
+  if(sl)  sl.value=val;
+  draw();
+}
+
+function draw(){
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  // Grid
+  ctx.save();
+  ctx.strokeStyle='#0d1f2d'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  ctx.restore();
+
+  /*
+   * GEOMETRY:
+   * Corner = bottom-right area of canvas
+   * M1 = horizontal mirror, extends LEFT from corner  (along -X axis, rotated by m1r)
+   * M2 = vertical mirror,   extends UP   from corner  (along -Y axis, rotated by m2r)
+   * Laser source = bottom-left, beam goes RIGHT hitting M1
+   * After M1 reflection: beam goes UP hitting M2
+   * After M2 reflection: beam goes LEFT (anti-parallel to incident)
+   */
+
+  const corner = { x: W*0.62, y: H*0.65 };
+  const mLen   = Math.min(W,H) * 0.30;
+  const rayLen = Math.max(W,H) * 0.5;
+
+  const m1rot = angles.m1r * DEG;
+  const m2rot = angles.m2r * DEG;
+  const i1deg = angles.i1;
+  const i1r   = i1deg * DEG;
+
+  // ── M1: horizontal base pointing LEFT, rotated by m1rot ──
+  // M1 direction vector (from corner going left+rotation)
+  const m1DirAngle = Math.PI + m1rot;          // base = 180° = left
+  const m1dx = Math.cos(m1DirAngle);
+  const m1dy = Math.sin(m1DirAngle);
+
+  // M1 endpoints
+  const m1End = { x: corner.x + mLen*m1dx, y: corner.y + mLen*m1dy };
+  // corner is the right end of M1
+
+  // M1 normal: rotate M1 direction 90° CCW → points UPWARD for horizontal mirror
+  // Normal = (-m1dy, m1dx). For horizontal M1 (m1rot=0): normal = (0, -1) = UP ✓
+  let m1n = { x: -m1dy, y: m1dx };
+  // Ensure it points upward (negative y in screen coords)
+  if(m1n.y > 0) { m1n.x=-m1n.x; m1n.y=-m1n.y; }
+
+  // Hit point on M1: at 55% from corner toward end
+  const hp1 = {
+    x: corner.x + 0.55*(m1End.x - corner.x),
+    y: corner.y + 0.55*(m1End.y - corner.y)
+  };
+
+  // ── Incident ray direction ──
+  // Comes from the LEFT, angle i1 from M1's normal
+  // Incident direction = rotate normal by (180° - i1) around the z-axis
+  // inc points TOWARD the mirror (downward-right for horizontal M1)
+  // For M1 normal pointing up: inc = rotate(m1n, 180°-i1r) but going INTO surface
+  // Simpler: inc = (cos(α), sin(α)) where α = angle of normal + π - i1r
+  // With m1rot=0, normal angle = -π/2 (up), so inc angle = -π/2 + π - i1r = π/2 - i1r
+  // That gives: inc = (sin(i1r), cos(i1r)) → going right+down ✓
+  const normAngle1 = Math.atan2(m1n.y, m1n.x);
+  const incAngle   = normAngle1 + Math.PI - i1r;
+  const inc = { x: Math.cos(incAngle), y: Math.sin(incAngle) };
+
+  // Reflect inc off M1: ref = inc - 2(inc·n)n
+  const d1 = inc.x*m1n.x + inc.y*m1n.y;
+  const ref1 = { x: inc.x - 2*d1*m1n.x, y: inc.y - 2*d1*m1n.y };
+
+  // ── M2: vertical base pointing UP, rotated by m2rot ──
+  // M2 direction vector from corner going up+rotation
+  const m2DirAngle = -Math.PI/2 + m2rot;       // base = -90° = up
+  const m2dx = Math.cos(m2DirAngle);
+  const m2dy = Math.sin(m2DirAngle);
+
+  const m2End = { x: corner.x + mLen*m2dx, y: corner.y + mLen*m2dy };
+  // corner is the bottom end of M2
+
+  // M2 normal: rotate M2 direction 90° CCW → points LEFT for vertical mirror
+  // Normal = (-m2dy, m2dx). For vertical M2 (m2rot=0): normal = (1, 0) = RIGHT
+  // But we want it facing the incoming ref1 (which comes from the left going right)
+  let m2n = { x: -m2dy, y: m2dx };
+  // Make sure m2 normal faces the incoming ref1 beam (dot product > 0)
+  if(ref1.x*m2n.x + ref1.y*m2n.y > 0) { m2n.x=-m2n.x; m2n.y=-m2n.y; }
+
+  // ── Intersection of ref1 with M2 line ──
+  // Ray: hp1 + t*ref1
+  // M2 line: corner + s*m2dir
+  // Solve: hp1 + t*ref1 = corner + s*(m2dx,m2dy)
+  const denom = ref1.x*m2dy - ref1.y*m2dx;
+  let hp2 = { x: corner.x, y: corner.y };
+  if(Math.abs(denom) > 0.001){
+    const tt = ((corner.x-hp1.x)*m2dy - (corner.y-hp1.y)*m2dx) / denom;
+    hp2 = { x: hp1.x + tt*ref1.x, y: hp1.y + tt*ref1.y };
+  }
+
+  // Reflect ref1 off M2
+  const d2 = ref1.x*m2n.x + ref1.y*m2n.y;
+  const ref2 = { x: ref1.x - 2*d2*m2n.x, y: ref1.y - 2*d2*m2n.y };
+
+  // ── Compute angles for display ──
+  const r1 = i1deg;
+  const cosI2 = Math.abs(ref1.x*(-m2n.x) + ref1.y*(-m2n.y));
+  const i2 = Math.acos(Math.min(1,cosI2)) * RAD;
+  const cosExit = ref2.x*inc.x + ref2.y*inc.y;
+  const exitDiff = Math.acos(Math.max(-1,Math.min(1,cosExit))) * RAD;
+  const isAntiP = Math.abs(exitDiff - 180) < 3;
+
+  // ── DRAW ──
+
+  // Selection glow
+  if(selectedMirror===1) glowLine(m1End.x,m1End.y,corner.x,corner.y,'rgba(74,247,255,0.12)',20);
+  if(selectedMirror===2) glowLine(corner.x,corner.y,m2End.x,m2End.y,'rgba(255,107,157,0.12)',20);
+
+  // Normal dashed lines
+  const nL=75;
+  dashed(hp1.x-m1n.x*nL, hp1.y-m1n.y*nL, hp1.x+m1n.x*nL, hp1.y+m1n.y*nL, '#1a4a6a');
+  dashed(hp2.x-m2n.x*nL, hp2.y-m2n.y*nL, hp2.x+m2n.x*nL, hp2.y+m2n.y*nL, '#1a4a6a');
+
+  // Store hit zones for click detection
+  mirrorHitZones = [
+    { id:1, x1:m1End.x, y1:m1End.y, x2:corner.x, y2:corner.y },
+    { id:2, x1:corner.x, y1:corner.y, x2:m2End.x, y2:m2End.y }
+  ];
+
+  // Draw mirrors
+  drawMirror(m1End.x,m1End.y, corner.x,corner.y, '#4af7ff','M₁', selectedMirror===1);
+  drawMirror(corner.x,corner.y, m2End.x,m2End.y, '#ff6b9d','M₂', selectedMirror===2);
+
+  // Corner dot
+  dotC(corner.x, corner.y, '#fff', 5);
+
+  // Incident ray (from left → hp1)
+  const srcX = hp1.x - inc.x*rayLen;
+  const srcY = hp1.y - inc.y*rayLen;
+  arrowLine(srcX, srcY, hp1.x, hp1.y, '#00ffe0');
+  lbl(srcX+8, srcY+16, 'INCIDENT', '#00ffe0');
+
+  // Reflected ray M1→M2 (yellow)
+  arrowLine(hp1.x, hp1.y, hp2.x, hp2.y, '#f0c040');
+
+  // Exit ray from M2
+  const eColor = isAntiP ? '#4ade80' : '#ff3e6c';
+  const exX = hp2.x + ref2.x*rayLen;
+  const exY = hp2.y + ref2.y*rayLen;
+  arrowLine(hp2.x, hp2.y, exX, exY, eColor);
+  lbl(exX-10, exY-12, 'EXIT RAY', eColor);
+
+  // Angle arcs
+  // i1 arc at hp1 (between incident and normal)
+  const na1 = Math.atan2(m1n.y, m1n.x);
+  const ia  = Math.atan2(inc.y, inc.x);
+  arc(hp1.x, hp1.y, 44, na1+Math.PI, ia+Math.PI, '#00ffe0aa', i1deg.toFixed(0)+'°');
+  // r1 arc at hp1 (between normal and reflected)
+  const ra1 = Math.atan2(ref1.y, ref1.x);
+  arc(hp1.x, hp1.y, 58, na1, ra1, '#f0c040aa', r1.toFixed(0)+'°');
+
+  // i2 arc at hp2
+  const na2    = Math.atan2(m2n.y, m2n.x);
+  const inDir2 = Math.atan2(-ref1.y, -ref1.x);
+  arc(hp2.x, hp2.y, 44, na2+Math.PI, inDir2+Math.PI, '#ff6b9daa', i2.toFixed(0)+'°');
+
+  // P1 P2 labels
+  ctx.save();
+  ctx.font='bold 12px Rajdhani,sans-serif';
+  ctx.fillStyle='#4af7ff'; ctx.fillText('P₁', hp1.x+7, hp1.y-8);
+  ctx.fillStyle='#ff6b9d'; ctx.fillText('P₂', hp2.x+7, hp2.y-8);
+  ctx.restore();
+
+  // Panel update
+  document.getElementById('rv_i1').innerHTML = i1deg.toFixed(0)+'<sup>°</sup>';
+  document.getElementById('rv_r1').innerHTML = r1.toFixed(0)+'<sup>°</sup>';
+  document.getElementById('rv_i2').innerHTML = i2.toFixed(1)+'<sup>°</sup>';
+  document.getElementById('rv_r2').innerHTML = i2.toFixed(1)+'<sup>°</sup>';
+  document.getElementById('rv_diff').innerHTML = exitDiff.toFixed(1)+'<sup>°</sup>';
+  const vrd = document.getElementById('verdict');
+  const vtx = document.getElementById('verdict_text');
+  if(isAntiP){
+    vrd.className='verdict ok';
+    vtx.textContent='EXIT RAY IS ANTI-PARALLEL ✓ PROVEN';
+  } else {
+    vrd.className='verdict no';
+    vtx.textContent='NOT ANTI-PARALLEL — ADJUST M2 TO ⊥';
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────
+function arrowLine(x1,y1,x2,y2,color,lw=2.5){
+  const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);
+  if(len<1)return;
+  const ux=dx/len,uy=dy/len;
+  ctx.save();
+  ctx.shadowColor=color; ctx.shadowBlur=14;
+  ctx.strokeStyle=color; ctx.lineWidth=lw;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.fillStyle=color;
+  const ax=x2-ux*14,ay=y2-uy*14;
+  ctx.beginPath(); ctx.moveTo(x2,y2); ctx.lineTo(ax-uy*5,ay+ux*5); ctx.lineTo(ax+uy*5,ay-ux*5); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function dashed(x1,y1,x2,y2,color){
+  ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=1; ctx.setLineDash([5,6]);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.setLineDash([]); ctx.restore();
+}
+function drawMirror(x1,y1,x2,y2,color,lbl,sel){
+  const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy);
+  const ux=dx/len,uy=dy/len,nx=-uy,ny=ux;
+  ctx.save();
+  ctx.shadowColor=color; ctx.shadowBlur=sel?22:10;
+  ctx.strokeStyle=color; ctx.lineWidth=sel?3.5:2.5;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.strokeStyle=color+'55'; ctx.lineWidth=1.5;
+  for(let t=0.12;t<0.95;t+=0.14){
+    const mx=x1+t*dx,my=y1+t*dy;
+    ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx-nx*8,my-ny*8); ctx.stroke();
+  }
+  ctx.fillStyle=color; ctx.font='bold 14px Rajdhani,sans-serif'; ctx.shadowBlur=8;
+  ctx.fillText(lbl,(x1+x2)/2+nx*18-5,(y1+y2)/2+ny*18+5);
+  ctx.restore();
+}
+function glowLine(x1,y1,x2,y2,color,blur){
+  ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=blur;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.restore();
+}
+function arc(cx,cy,r,a1,a2,color,label){
+  ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(cx,cy,r,a1,a2); ctx.stroke();
+  const amid=(a1+a2)/2;
+  ctx.fillStyle=color; ctx.font='11px Share Tech Mono,monospace';
+  ctx.fillText(label, cx+(r+20)*Math.cos(amid)-8, cy+(r+20)*Math.sin(amid)+4);
+  ctx.restore();
+}
+function dotC(x,y,color,r){
+  ctx.save(); ctx.fillStyle=color; ctx.shadowColor=color; ctx.shadowBlur=12;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); ctx.restore();
+}
+function lbl(x,y,txt,color){
+  ctx.save(); ctx.fillStyle=color; ctx.font='10px Share Tech Mono,monospace';
+  ctx.shadowColor=color; ctx.shadowBlur=6; ctx.fillText(txt,x,y); ctx.restore();
+}
+
+resize();
+selectMirror(1);
+</script>
+</body>
+</html>
