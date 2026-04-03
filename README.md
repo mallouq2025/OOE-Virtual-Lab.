@@ -12,12 +12,13 @@
 
 ## 👥 TEAM IDENTIFICATION
 *To be completed by the Project Leader:*
-- **Project Leader:** [Full Name]
-- **Group Number:** [e.g., G1, G2...]
+- **Project Leader:** MOSTEFAI Malak
+- **Group Number:** G1
 - **Team Members:**
-  1. [Name 1]
-  2. [Name 2]
-  3. [Name 3]
+  1. BOUKHEMIS Manal
+  2. SELIM Ibtissem
+  3. KAINOU Aya
+  4. BEN KREIRA Nour El Imane
 
 ---
 
