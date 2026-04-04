@@ -1,0 +1,353 @@
+
+<style>
+  body { margin: 0; }
+  .wrap { padding: 1rem 0; }
+  .title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .badge { background: #FAECE7; color: #993C1D; font-size: 12px; padding: 2px 10px; border-radius: 20px; }
+  .legend { display: flex; gap: 18px; margin: 10px 0 6px; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+  .leg-dot { width: 28px; height: 3px; border-radius: 2px; }
+  .info-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  .info-card { flex: 1; min-width: 100px; background: var(--color-background-secondary); border-radius: 8px; padding: 8px 12px; }
+  .info-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 2px; }
+  .info-val { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+  .ctrl-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+  .ctrl-label { font-size: 12px; color: var(--color-text-secondary); width: 100px; flex-shrink: 0; }
+  .ctrl-val { font-size: 12px; font-weight: 500; min-width: 50px; text-align: right; color: var(--color-text-primary); }
+  canvas { display: block; width: 100%; border-radius: 8px; }
+  .zone-legend { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+  .zone-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+  .zone-box { width: 18px; height: 14px; border-radius: 3px; }
+  .btn-row { display: flex; gap: 10px; margin-top: 12px; }
+  button { font-size: 13px; padding: 7px 18px; cursor: pointer; border: 0.5px solid var(--color-border-secondary); border-radius: 8px; background: var(--color-background-primary); color: var(--color-text-primary); }
+  button:hover { background: var(--color-background-secondary); }
+  button.active { background: var(--color-background-secondary); border-color: #3266ad; color: #3266ad; }
+</style>
+
+<div class="wrap">
+  <div class="title-row">
+    <span style="font-size:17px; font-weight:500; color:var(--color-text-primary);">Standing wave — signal strength map</span>
+    <span class="badge">animated</span>
+  </div>
+
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#3266ad;"></div>Incident wave →</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#D85A30;"></div>Reflected wave ←</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#7F77DD;"></div>Standing wave (sum)</div>
+  </div>
+
+  <div style="position:relative; width:100%; height:200px; margin-top:8px;">
+    <canvas id="waveCanvas"></canvas>
+  </div>
+
+  <div style="margin-top:14px; font-size:12px; font-weight:500; color:var(--color-text-secondary); text-transform:uppercase; letter-spacing:.04em;">Signal strength map (où mettre l'intercepteur)</div>
+  <div style="position:relative; width:100%; height:54px; margin-top:6px;">
+    <canvas id="heatCanvas"></canvas>
+  </div>
+
+  <div class="zone-legend">
+    <div class="zone-item"><div class="zone-box" style="background:#D85A30;"></div><strong style="color:var(--color-text-primary);">Antinode</strong> — signal max, place ton intercepteur ici</div>
+    <div class="zone-item"><div class="zone-box" style="background:#1D9E75;"></div><strong style="color:var(--color-text-primary);">Node</strong> — signal = 0, inutile</div>
+  </div>
+
+  <div class="ctrl-row" style="margin-top:14px;">
+    <span class="ctrl-label">Fréquence (MHz)</span>
+    <input type="range" id="freq" min="200" max="2400" value="900" step="50" style="flex:1; accent-color:#3266ad;">
+    <span class="ctrl-val" id="freq-val">900 MHz</span>
+  </div>
+  <div class="ctrl-row">
+    <span class="ctrl-label">Vitesse anim.</span>
+    <input type="range" id="speed" min="0.2" max="3" value="1" step="0.1" style="flex:1; accent-color:#3266ad;">
+    <span class="ctrl-val" id="speed-val">×1.0</span>
+  </div>
+
+  <div class="btn-row">
+    <button id="btnPause">⏸ Pause</button>
+    <button id="btnInc" class="active">Voir onde incidente</button>
+    <button id="btnRef" class="active">Voir onde réfléchie</button>
+  </div>
+
+  <div class="info-row">
+    <div class="info-card">
+      <div class="info-label">Longueur d'onde λ</div>
+      <div class="info-val" id="iLambda">33.3 cm</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">1er antinode (λ/4)</div>
+      <div class="info-val" style="color:#D85A30;" id="iAnti">8.3 cm</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">1er node (λ/2)</div>
+      <div class="info-val" style="color:#1D9E75;" id="iNode">16.7 cm</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const c = 3e8;
+let freq = 900e6;
+let speedMul = 1.0;
+let paused = false;
+let showInc = true, showRef = true;
+let t = 0;
+let raf;
+
+const waveCanvas = document.getElementById('waveCanvas');
+const heatCanvas = document.getElementById('heatCanvas');
+
+function getLambda() { return c / freq; }
+function getK() { return 2 * Math.PI / getLambda(); }
+
+function drawWave() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = waveCanvas.parentElement.clientWidth;
+  const H = 200;
+  waveCanvas.width = W * dpr;
+  waveCanvas.height = H * dpr;
+  waveCanvas.style.width = W + 'px';
+  waveCanvas.style.height = H + 'px';
+  const ctx = waveCanvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const bg = isDark ? '#1a1a1a' : '#ffffff';
+  const gridCol = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
+  const axisCol = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
+  const wallFill = isDark ? '#555' : '#444';
+  const textCol = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const padL = 14, padR = 52, padT = 16, padB = 24;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const midY = padT + plotH / 2;
+
+  const lambda = getLambda();
+  const k = getK();
+  const omega = 2 * Math.PI * freq;
+  const displayRange = lambda * 3;
+  const A = 1;
+
+  const xP = x => padL + (x / displayRange) * plotW;
+  const yP = y => midY - y * (plotH / 2) / (2.2 * A);
+
+  // grid
+  ctx.strokeStyle = gridCol;
+  ctx.lineWidth = 0.5;
+  [-1, -0.5, 0, 0.5, 1].forEach(v => {
+    const y = yP(v * 2 * A);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+  });
+
+  const N = plotW * 2;
+
+  // incident wave: A sin(kx - ωt)  (travels in +x direction, hits wall at x=0)
+  if (showInc) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#3266ad';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i <= N; i++) {
+      const x = (i / N) * displayRange;
+      const y = A * Math.sin(k * x - omega * t);
+      i === 0 ? ctx.moveTo(xP(x), yP(y)) : ctx.lineTo(xP(x), yP(y));
+    }
+    ctx.stroke();
+  }
+
+  // reflected wave: -A sin(kx + ωt)  (wall at x=0 → reflection with phase flip... or same: A sin(-kx - ωt + π) )
+  // standing wave = incident + reflected = 2A sin(kx)cos(ωt) when wall at x=0
+  // reflected: A sin(-kx - ωt + π) = -A sin(-kx - ωt) = A sin(kx + ωt)  (no phase flip for E-field TM)
+  // Let's use: incident = A cos(kx - ωt), reflected = -A cos(-kx - ωt) = -A cos(kx + ωt)
+  // sum = A cos(kx-ωt) - A cos(kx+ωt) = 2A sin(kx)sin(ωt) → antinodes at kx = π/2 → x = λ/4 ✓
+  if (showRef) {
+    ctx.beginPath();
+    ctx.strokeStyle = '#D85A30';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i <= N; i++) {
+      const x = (i / N) * displayRange;
+      const y = -A * Math.cos(k * x + omega * t);
+      i === 0 ? ctx.moveTo(xP(x), yP(y)) : ctx.lineTo(xP(x), yP(y));
+    }
+    ctx.stroke();
+  }
+
+  // standing wave
+  ctx.beginPath();
+  ctx.strokeStyle = '#7F77DD';
+  ctx.lineWidth = 2.5;
+  for (let i = 0; i <= N; i++) {
+    const x = (i / N) * displayRange;
+    const inc = A * Math.cos(k * x - omega * t);
+    const ref = -A * Math.cos(k * x + omega * t);
+    const y = inc + ref;
+    i === 0 ? ctx.moveTo(xP(x), yP(y)) : ctx.lineTo(xP(x), yP(y));
+  }
+  ctx.stroke();
+
+  // antinodes markers
+  for (let n = 1; n * lambda / 4 < displayRange * 1.02; n += 2) {
+    const xa = n * lambda / 4;
+    const px = xP(xa);
+    ctx.strokeStyle = 'rgba(216,90,48,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#D85A30';
+    ctx.font = '10px sans-serif';
+    if (n === 1) ctx.fillText('λ/4', px + 2, padT + 11);
+    else if (n === 3) ctx.fillText('3λ/4', px + 2, padT + 11);
+  }
+
+  // node markers
+  for (let n = 1; n * lambda / 2 < displayRange * 1.02; n++) {
+    const xa = n * lambda / 2;
+    const px = xP(xa);
+    ctx.strokeStyle = 'rgba(29,158,117,0.35)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#0F6E56';
+    ctx.font = '10px sans-serif';
+    ctx.fillText('node', px + 2, padT + 11);
+  }
+
+  // wall
+  ctx.fillStyle = wallFill;
+  ctx.fillRect(padL - 3, padT, 5, plotH);
+  ctx.fillStyle = wallFill;
+  ctx.font = 'bold 10px sans-serif';
+  ctx.fillText('WALL', padL + 4, padT + 11);
+
+  // axis
+  ctx.strokeStyle = axisCol;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(padL, midY); ctx.lineTo(padL + plotW, midY); ctx.stroke();
+
+  // labels
+  ctx.fillStyle = textCol;
+  ctx.font = '10px sans-serif';
+  ctx.fillText('x →', padL + plotW + 2, midY + 4);
+  ctx.fillText('+2A', padL + plotW + 2, yP(2 * A) + 4);
+  ctx.fillText('−2A', padL + plotW + 2, yP(-2 * A) + 4);
+  ctx.fillText('0', padL + plotW + 2, midY + 4);
+}
+
+function drawHeat() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = heatCanvas.parentElement.clientWidth;
+  const H = 54;
+  heatCanvas.width = W * dpr;
+  heatCanvas.height = H * dpr;
+  heatCanvas.style.width = W + 'px';
+  heatCanvas.style.height = H + 'px';
+  const ctx = heatCanvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const bg = isDark ? '#1a1a1a' : '#ffffff';
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const lambda = getLambda();
+  const k = getK();
+  const displayRange = lambda * 3;
+  const padL = 14, padR = 52;
+  const plotW = W - padL - padR;
+
+  // heat gradient bar
+  const barY = 10, barH = 24;
+  for (let px = 0; px <= plotW; px++) {
+    const x = (px / plotW) * displayRange;
+    const strength = Math.abs(Math.sin(k * x));
+    // interpolate: 0 = green, 1 = red/orange
+    const r = Math.round(29 + (216 - 29) * strength);
+    const g = Math.round(158 + (90 - 158) * strength);
+    const b = Math.round(117 + (48 - 117) * strength);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(padL + px, barY, 1, barH);
+  }
+
+  ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(padL, barY, plotW, barH);
+
+  // labels below
+  const textCol = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.45)';
+  ctx.fillStyle = textCol;
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+
+  for (let n = 1; n * lambda / 4 < displayRange * 1.02; n += 2) {
+    const xa = n * lambda / 4;
+    const px = padL + (xa / displayRange) * plotW;
+    ctx.fillStyle = '#D85A30';
+    ctx.fillText('▲', px, barY + barH + 12);
+  }
+  for (let n = 1; n * lambda / 2 < displayRange * 1.02; n++) {
+    const xa = n * lambda / 2;
+    const px = padL + (xa / displayRange) * plotW;
+    ctx.fillStyle = '#1D9E75';
+    ctx.fillText('▼', px, barY + barH + 12);
+  }
+
+  ctx.fillStyle = textCol;
+  ctx.textAlign = 'left';
+  ctx.fillText('fort', padL + plotW + 4, barY + 10);
+  ctx.fillText('faible', padL + plotW + 4, barY + 22);
+
+  // wall
+  const isDarkW = isDark;
+  ctx.fillStyle = isDarkW ? '#555' : '#444';
+  ctx.fillRect(padL - 3, barY, 4, barH);
+  ctx.textAlign = 'left';
+}
+
+function updateStats() {
+  const lambda = getLambda();
+  document.getElementById('iLambda').textContent = (lambda * 100).toFixed(1) + ' cm';
+  document.getElementById('iAnti').textContent = (lambda / 4 * 100).toFixed(1) + ' cm';
+  document.getElementById('iNode').textContent = (lambda / 2 * 100).toFixed(1) + ' cm';
+}
+
+function loop() {
+  if (!paused) {
+    const omega = 2 * Math.PI * freq;
+    const T = 1 / freq;
+    t += (T / 120) * speedMul;
+    if (t > T * 10) t -= T * 10;
+  }
+  drawWave();
+  drawHeat();
+  raf = requestAnimationFrame(loop);
+}
+
+document.getElementById('freq').addEventListener('input', e => {
+  freq = +e.target.value * 1e6;
+  document.getElementById('freq-val').textContent = e.target.value + ' MHz';
+  updateStats();
+});
+document.getElementById('speed').addEventListener('input', e => {
+  speedMul = +e.target.value;
+  document.getElementById('speed-val').textContent = '×' + (+e.target.value).toFixed(1);
+});
+document.getElementById('btnPause').addEventListener('click', () => {
+  paused = !paused;
+  document.getElementById('btnPause').textContent = paused ? '▶ Play' : '⏸ Pause';
+});
+document.getElementById('btnInc').addEventListener('click', () => {
+  showInc = !showInc;
+  document.getElementById('btnInc').classList.toggle('active', showInc);
+});
+document.getElementById('btnRef').addEventListener('click', () => {
+  showRef = !showRef;
+  document.getElementById('btnRef').classList.toggle('active', showRef);
+});
+
+window.addEventListener('resize', () => { drawWave(); drawHeat(); });
+updateStats();
+loop();
+</script>

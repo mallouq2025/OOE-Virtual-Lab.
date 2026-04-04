@@ -1,0 +1,379 @@
+
+<style>
+  .wrap { padding: 1rem 0; font-family: var(--font-sans); }
+  .hdr { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .badge { background: #FAECE7; color: #993C1D; font-size: 11px; padding: 2px 9px; border-radius: 20px; }
+  .badge2 { background: #EEEDFE; color: #3C3489; font-size: 11px; padding: 2px 9px; border-radius: 20px; }
+  .subtitle { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 14px; }
+  .password-row { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; align-items: center; }
+  .char-box { width: 36px; height: 42px; border: 2px solid var(--color-border-secondary); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 500; color: var(--color-text-primary); background: var(--color-background-secondary); transition: all 0.3s; }
+  .char-box.found { border-color: #D85A30; background: #FAECE7; color: #993C1D; }
+  .char-box.hint { border-color: #7F77DD; background: #EEEDFE; animation: pulse 0.5s ease; }
+  @keyframes pulse { 0%{transform:scale(1)} 50%{transform:scale(1.2)} 100%{transform:scale(1)} }
+  canvas#gameCanvas { display: block; width: 100%; border-radius: 10px; cursor: crosshair; }
+  .meter-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+  .meter-label { font-size: 12px; color: var(--color-text-secondary); width: 100px; flex-shrink: 0; }
+  .meter-bar { flex: 1; height: 12px; background: var(--color-background-secondary); border-radius: 6px; overflow: hidden; border: 0.5px solid var(--color-border-tertiary); }
+  .meter-fill { height: 100%; border-radius: 6px; transition: width 0.15s, background 0.15s; }
+  .meter-val { font-size: 13px; font-weight: 500; min-width: 44px; text-align: right; color: var(--color-text-primary); }
+  .info-row { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+  .info-card { flex: 1; min-width: 90px; background: var(--color-background-secondary); border-radius: 8px; padding: 8px 10px; }
+  .info-lbl { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 2px; }
+  .info-val { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+  .msg-box { border-radius: 8px; padding: 10px 14px; font-size: 13px; margin: 10px 0; line-height: 1.6; border-left: 3px solid #D85A30; background: var(--color-background-secondary); color: var(--color-text-primary); min-height: 38px; }
+  .win-box { border-left-color: #1D9E75; background: #E1F5EE; color: #085041; display: none; }
+  .btn-row { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  button { font-size: 13px; padding: 7px 16px; cursor: pointer; border: 0.5px solid var(--color-border-secondary); border-radius: 8px; background: var(--color-background-primary); color: var(--color-text-primary); }
+  button:hover { background: var(--color-background-secondary); }
+  .score-row { display: flex; align-items: center; gap: 16px; margin: 8px 0; font-size: 13px; color: var(--color-text-secondary); flex-wrap: wrap; }
+  .score-val { font-size: 16px; font-weight: 500; color: var(--color-text-primary); }
+  .tries-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .try-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-border-secondary); }
+  .try-dot.used { background: #D85A30; }
+  .try-dot.good { background: #1D9E75; }
+  .section-title { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: .04em; margin: 12px 0 6px; }
+</style>
+
+<div class="wrap">
+  <div class="hdr">
+    <span style="font-size:17px;font-weight:500;color:var(--color-text-primary);">🔐 The Spy's Echo — Mini Game</span>
+    <span class="badge">Track 1</span>
+    <span class="badge2">Side-Channel Attack</span>
+  </div>
+  <div class="subtitle">Click on the wave to place your interceptor and crack the password — find the antinodes!</div>
+
+  <div class="score-row">
+    <span>Score: <span class="score-val" id="scoreVal">0</span></span>
+    <span>Attempts:</span>
+    <div class="tries-row" id="triesRow"></div>
+  </div>
+
+  <div style="position:relative;width:100%;height:240px;">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+  <div class="meter-row" style="margin-top:10px;">
+    <span class="meter-label">Signal strength</span>
+    <div class="meter-bar"><div class="meter-fill" id="meterFill" style="width:0%;background:#1D9E75;"></div></div>
+    <span class="meter-val" id="meterVal">0%</span>
+  </div>
+
+  <div class="info-row">
+    <div class="info-card">
+      <div class="info-lbl">Position x</div>
+      <div class="info-val" id="posVal">— cm</div>
+    </div>
+    <div class="info-card">
+      <div class="info-lbl">1st antinode (λ/4)</div>
+      <div class="info-val" style="color:#D85A30;" id="antiVal">— cm</div>
+    </div>
+    <div class="info-card">
+      <div class="info-lbl">Frequency</div>
+      <div class="info-val" id="freqVal">900 MHz</div>
+    </div>
+    <div class="info-card">
+      <div class="info-lbl">Wavelength λ</div>
+      <div class="info-val" id="lambdaVal">— cm</div>
+    </div>
+  </div>
+
+  <div class="msg-box" id="msgBox">📡 Click on the wave to place your interceptor and measure signal strength...</div>
+  <div class="msg-box win-box" id="winBox"></div>
+
+  <div class="section-title">Intercepted password</div>
+  <div class="password-row" id="passwordRow"></div>
+
+  <div class="btn-row">
+    <button onclick="resetGame()">🔄 New level</button>
+    <button onclick="showHint()">💡 Hint (−10 pts)</button>
+  </div>
+
+  <div style="margin-top:16px; padding: 10px 14px; border-radius:8px; background:var(--color-background-secondary); font-size:12px; color:var(--color-text-secondary); line-height:1.7;">
+    <strong style="color:var(--color-text-primary);">How to play:</strong><br>
+    The wireless signal bounces off the metal wall, creating a <strong style="color:var(--color-text-primary);">standing wave</strong> A(x) = 2A₀|sin(kx)|.<br>
+    Signal is maximum at <strong style="color:#D85A30;">antinodes</strong> (x = λ/4, 3λ/4, ...) and zero at <strong style="color:#1D9E75;">nodes</strong> (x = λ/2, λ, ...).<br>
+    Place your interceptor at an antinode to capture the strongest signal and decrypt the password!
+  </div>
+</div>
+
+<script>
+const PASSWORDS = ['CYBER','WAVE','ECHO','HACK','SPY','SIGNAL','CODE','CRYPTO'];
+const FREQS = [600,900,1200,1500,2400];
+const c = 3e8;
+let password = '', freq = 900e6, lambda = 0, k = 0;
+let foundChars = [], tries = 0, maxTries = 8, score = 0;
+let interceptorX = -1;
+let animT = 0, raf;
+let placed = false;
+const THRESHOLD_ANTI = 0.82;
+const THRESHOLD_MID  = 0.45;
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function initLevel() {
+  password = PASSWORDS[Math.floor(Math.random() * PASSWORDS.length)];
+  freq = FREQS[Math.floor(Math.random() * FREQS.length)] * 1e6;
+  lambda = c / freq;
+  k = 2 * Math.PI / lambda;
+  foundChars = new Array(password.length).fill(false);
+  tries = 0;
+  interceptorX = -1;
+  placed = false;
+  document.getElementById('antiVal').textContent = (lambda/4*100).toFixed(1) + ' cm';
+  document.getElementById('freqVal').textContent = (freq/1e6).toFixed(0) + ' MHz';
+  document.getElementById('lambdaVal').textContent = (lambda*100).toFixed(1) + ' cm';
+  document.getElementById('posVal').textContent = '— cm';
+  document.getElementById('meterFill').style.width = '0%';
+  document.getElementById('meterVal').textContent = '0%';
+  document.getElementById('msgBox').style.display = 'block';
+  document.getElementById('msgBox').textContent = '📡 Click on the wave to place your interceptor and measure signal strength...';
+  document.getElementById('winBox').style.display = 'none';
+  buildPasswordUI();
+  buildTriesUI();
+}
+
+function buildPasswordUI() {
+  const row = document.getElementById('passwordRow');
+  row.innerHTML = '';
+  for (let i = 0; i < password.length; i++) {
+    const box = document.createElement('div');
+    box.className = 'char-box';
+    box.id = 'char-' + i;
+    box.textContent = foundChars[i] ? password[i] : '?';
+    if (foundChars[i]) box.classList.add('found');
+    row.appendChild(box);
+  }
+}
+
+function buildTriesUI() {
+  const row = document.getElementById('triesRow');
+  row.innerHTML = '';
+  for (let i = 0; i < maxTries; i++) {
+    const d = document.createElement('div');
+    d.className = 'try-dot' + (i < tries ? ' used' : '');
+    d.id = 'try-' + i;
+    row.appendChild(d);
+  }
+}
+
+function getPlotMetrics() {
+  const W = canvas.parentElement.clientWidth;
+  const H = 240;
+  const padL = 16, padR = 20, padT = 20, padB = 28;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const displayRange = lambda * 3;
+  return { W, H, padL, padR, padT, padB, plotW, plotH, displayRange,
+    xP: x => padL + (x / displayRange) * plotW,
+    xFromPx: px => ((px - padL) / plotW) * displayRange,
+    yP: y => padT + plotH/2 - y * (plotH/2) / 2.2 };
+}
+
+function getSignalStrength(x) { return Math.abs(Math.sin(k * x)); }
+
+function drawGame() {
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.clientWidth;
+  const H = 240;
+  if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.scale(dpr, dpr);
+  }
+
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const bg = isDark ? '#1a1a1a' : '#ffffff';
+  const gridCol = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
+  const wallCol = isDark ? '#777' : '#444';
+  const textCol = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.4)';
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const { padL, padT, padB, plotW, plotH, displayRange, xP, yP } = getPlotMetrics();
+  const midY = padT + plotH / 2;
+  const omega = 2 * Math.PI * freq;
+  const N = plotW * 2;
+
+  ctx.strokeStyle = gridCol; ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (i/4)*plotH;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL+plotW, y); ctx.stroke();
+  }
+
+  for (let px = 0; px <= plotW; px++) {
+    const x = (px / plotW) * displayRange;
+    const s = getSignalStrength(x);
+    const r = Math.round(29 + (216-29)*s), g = Math.round(158+(90-158)*s), b = Math.round(117+(48-117)*s);
+    ctx.fillStyle = `rgba(${r},${g},${b},0.13)`;
+    ctx.fillRect(padL+px, padT, 1, plotH);
+  }
+
+  ctx.beginPath(); ctx.strokeStyle = isDark ? 'rgba(50,102,173,0.5)' : 'rgba(50,102,173,0.4)'; ctx.lineWidth = 1.2;
+  for (let i = 0; i <= N; i++) {
+    const x = (i/N)*displayRange;
+    const y = Math.cos(k*x - omega*animT);
+    i===0 ? ctx.moveTo(xP(x), yP(y)) : ctx.lineTo(xP(x), yP(y));
+  }
+  ctx.stroke();
+
+  ctx.beginPath(); ctx.strokeStyle = isDark ? 'rgba(216,90,48,0.5)' : 'rgba(216,90,48,0.4)'; ctx.lineWidth = 1.2;
+  for (let i = 0; i <= N; i++) {
+    const x = (i/N)*displayRange;
+    const y = -Math.cos(k*x + omega*animT);
+    i===0 ? ctx.moveTo(xP(x), yP(y)) : ctx.lineTo(xP(x), yP(y));
+  }
+  ctx.stroke();
+
+  ctx.beginPath(); ctx.strokeStyle = '#7F77DD'; ctx.lineWidth = 2.5;
+  for (let i = 0; i <= N; i++) {
+    const x = (i/N)*displayRange;
+    const y = Math.cos(k*x - omega*animT) + (-Math.cos(k*x + omega*animT));
+    i===0 ? ctx.moveTo(xP(x), yP(y)) : ctx.lineTo(xP(x), yP(y));
+  }
+  ctx.stroke();
+
+  for (let n = 1; n*lambda/4 < displayRange*1.02; n += 2) {
+    const xa = n*lambda/4;
+    const px = xP(xa);
+    ctx.strokeStyle = 'rgba(216,90,48,0.3)'; ctx.lineWidth = 1;
+    ctx.setLineDash([3,4]);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT+plotH); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.fillStyle = wallCol;
+  ctx.fillRect(padL-4, padT, 6, plotH);
+  ctx.fillStyle = wallCol; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('WALL', padL+4, padT+12);
+
+  ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(padL, midY); ctx.lineTo(padL+plotW, midY); ctx.stroke();
+
+  ctx.fillStyle = textCol; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+  for (let n = 1; n*lambda/4 < displayRange*1.02; n++) {
+    const xa = n*lambda/4;
+    ctx.fillText((xa*100).toFixed(0)+'cm', xP(xa), padT+plotH+16);
+  }
+  ctx.textAlign = 'left';
+  ctx.fillText('x →', padL+plotW+2, midY+4);
+
+  // Legend top right
+  const lx = padL + plotW - 120, ly = padT + 8;
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = isDark ? 'rgba(50,102,173,0.8)' : '#3266ad';
+  ctx.fillText('— Incident', lx, ly);
+  ctx.fillStyle = isDark ? 'rgba(216,90,48,0.8)' : '#D85A30';
+  ctx.fillText('— Reflected', lx, ly+13);
+  ctx.fillStyle = '#7F77DD';
+  ctx.fillText('— Standing wave', lx, ly+26);
+
+  if (placed && interceptorX >= 0) {
+    const px = xP(interceptorX);
+    const s = getSignalStrength(interceptorX);
+    const col = s > THRESHOLD_ANTI ? '#D85A30' : s > THRESHOLD_MID ? '#EF9F27' : '#1D9E75';
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT+plotH); ctx.stroke();
+    ctx.setLineDash([]);
+    const gy = padT + plotH/2;
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.moveTo(px, gy-22); ctx.lineTo(px-8, gy-10); ctx.lineTo(px+8, gy-10); ctx.closePath(); ctx.fill();
+    ctx.fillRect(px-2, gy-10, 4, 14);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    for (let r = 8; r <= 20; r += 6) { ctx.beginPath(); ctx.arc(px, gy-22, r, -Math.PI*0.8, -Math.PI*0.2); ctx.stroke(); }
+    ctx.fillStyle = col; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`${(s*100).toFixed(0)}%`, px, padT+plotH+26);
+    ctx.textAlign = 'left';
+  }
+}
+
+function onCanvasClick(e) {
+  if (tries >= maxTries) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.parentElement.clientWidth / rect.width;
+  const rawX = (e.clientX - rect.left) * scaleX;
+  const { padL, plotW, xFromPx } = getPlotMetrics();
+  if (rawX < padL || rawX > padL + plotW) return;
+  const x = xFromPx(rawX);
+  if (x < 0) return;
+
+  interceptorX = x; placed = true; tries++;
+  const s = getSignalStrength(x);
+  const pct = Math.round(s * 100);
+
+  document.getElementById('posVal').textContent = (x * 100).toFixed(1) + ' cm';
+  const fillColor = s > THRESHOLD_ANTI ? '#D85A30' : s > THRESHOLD_MID ? '#EF9F27' : '#1D9E75';
+  document.getElementById('meterFill').style.width = pct + '%';
+  document.getElementById('meterFill').style.background = fillColor;
+  document.getElementById('meterVal').textContent = pct + '%';
+
+  const tryDot = document.getElementById('try-' + (tries-1));
+  if (tryDot) tryDot.classList.add(s > THRESHOLD_ANTI ? 'good' : 'used');
+
+  if (s > THRESHOLD_ANTI) {
+    const unrevealedIdxs = foundChars.map((f,i) => f ? -1 : i).filter(i => i >= 0);
+    const toReveal = Math.max(1, Math.ceil(unrevealedIdxs.length * 0.4));
+    const shuffled = unrevealedIdxs.sort(() => Math.random()-0.5).slice(0, toReveal);
+    shuffled.forEach(i => { foundChars[i] = true; });
+    score += 20 * shuffled.length;
+    document.getElementById('scoreVal').textContent = score;
+    buildPasswordUI();
+    const allFound = foundChars.every(f => f);
+    document.getElementById('msgBox').style.display = allFound ? 'none' : 'block';
+    document.getElementById('msgBox').textContent = allFound ? '' :
+      `🎯 Antinode found! (${pct}%) — ${shuffled.length} character(s) decrypted! Keep going...`;
+    if (allFound) {
+      document.getElementById('winBox').style.display = 'block';
+      document.getElementById('winBox').textContent =
+        `🏆 Password cracked: "${password}" — Score: ${score} pts in ${tries} attempt(s)!`;
+    }
+  } else if (s > THRESHOLD_MID) {
+    document.getElementById('msgBox').textContent =
+      `📶 Medium signal (${pct}%) — You're getting warmer! Try near an antinode (λ/4 = ${(lambda/4*100).toFixed(1)} cm from wall)`;
+  } else {
+    document.getElementById('msgBox').textContent =
+      `❌ Weak signal (${pct}%) — You're on a node! Try x = λ/4 = ${(lambda/4*100).toFixed(1)} cm from the wall`;
+  }
+
+  if (tries >= maxTries && !foundChars.every(f => f)) {
+    document.getElementById('msgBox').textContent =
+      `💀 Game over! The password was: "${password}". Antinode was at x = ${(lambda/4*100).toFixed(1)} cm`;
+    foundChars = foundChars.map(() => true);
+    buildPasswordUI();
+  }
+}
+
+function showHint() {
+  score = Math.max(0, score - 10);
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('msgBox').textContent =
+    `💡 Hint: Place your interceptor at x = λ/4 = ${(lambda/4*100).toFixed(1)} cm from the wall — that's the 1st antinode!`;
+}
+
+function resetGame() { initLevel(); }
+
+canvas.addEventListener('click', onCanvasClick);
+
+function loop() {
+  const T = 1 / freq;
+  animT += T / 100;
+  if (animT > T * 10) animT -= T * 10;
+  drawGame();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize', () => {
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.clientWidth;
+  canvas.width = W * dpr; canvas.height = 240 * dpr;
+  canvas.style.width = W + 'px'; canvas.style.height = '240px';
+  ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr, dpr);
+});
+
+initLevel();
+loop();
+</script>
